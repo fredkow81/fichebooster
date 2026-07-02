@@ -81,6 +81,11 @@ export async function verifyStoreConnection(
   }
 }
 
+// Safety cap on pagination loops (2000 products) so a pathologically large
+// catalog can't hang a page load indefinitely.
+const MAX_PRODUCT_PAGES = 20;
+const PRODUCT_PAGE_SIZE = 100;
+
 export async function listProducts(
   store: StoreCredentials,
   opts: { search?: string; first?: number } = {},
@@ -93,14 +98,40 @@ export async function listProducts(
   }
 
   const token = await resolveToken(store);
-  const data = await shopifyGraphQL<{
-    products: { nodes: RawProductSummary[] };
-  }>(store.shopDomain, token, PRODUCT_LIST_QUERY, {
-    first: opts.first ?? 50,
-    query: opts.search ? `title:*${opts.search}*` : undefined,
-  });
+  const queryFilter = opts.search ? `title:*${opts.search}*` : undefined;
 
-  return data.products.nodes.map(mapProductSummary);
+  // A hard cap (e.g. the dashboard's "recent products" preview) fetches a
+  // single page — no need to page through the whole catalog for that.
+  if (opts.first !== undefined) {
+    const data = await shopifyGraphQL<{ products: { nodes: RawProductSummary[] } }>(
+      store.shopDomain,
+      token,
+      PRODUCT_LIST_QUERY,
+      { first: opts.first, query: queryFilter },
+    );
+    return data.products.nodes.map(mapProductSummary);
+  }
+
+  // Otherwise, page through the full catalog — Shopify caps each response
+  // at the requested page size regardless of total product count.
+  const results: ShopifyProductSummary[] = [];
+  let after: string | undefined;
+
+  for (let page = 0; page < MAX_PRODUCT_PAGES; page++) {
+    const data = await shopifyGraphQL<{
+      products: {
+        nodes: RawProductSummary[];
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    }>(store.shopDomain, token, PRODUCT_LIST_QUERY, { first: PRODUCT_PAGE_SIZE, query: queryFilter, after });
+
+    results.push(...data.products.nodes.map(mapProductSummary));
+
+    if (!data.products.pageInfo.hasNextPage) break;
+    after = data.products.pageInfo.endCursor ?? undefined;
+  }
+
+  return results;
 }
 
 export async function getProduct(
