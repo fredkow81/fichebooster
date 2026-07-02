@@ -31,7 +31,7 @@ Next.js App Router (UI + API routes)
    │      GraphQL Admin API ⇄ fixtures (mode démo)
    │
    ├── AI service layer (src/lib/ai)
-   │      Prompt vision+texte ⇄ Anthropic Claude ⇄ fixtures (mode démo)
+   │      Prompt vision+texte ⇄ OpenAI (GPT-4o) ⇄ fixtures (mode démo)
    │      → JSON structuré strict (Zod)
    │
    ├── SEO layer (src/lib/seo)
@@ -54,7 +54,7 @@ Le SaaS ne modifie **jamais** une fiche produit Shopify sans validation humaine 
 - **Base de données** : PostgreSQL + Prisma ORM
 - **Auth** : NextAuth (credentials, sessions JWT)
 - **Shopify** : Admin API GraphQL (2024-10)
-- **IA** : Anthropic Claude (vision + texte), architecture pluggable (`AiProvider`)
+- **IA** : OpenAI GPT-4o (vision + texte, Structured Outputs), architecture pluggable (`AiProvider`)
 - **Validation** : Zod partout (entrées API, sortie IA, formulaires)
 - **Tests** : Vitest
 
@@ -123,8 +123,8 @@ Toutes les variables sont validées au démarrage via [`src/lib/env.ts`](src/lib
 | `TOKEN_ENCRYPTION_KEY` | Clé AES-256 (64 caractères hex) utilisée pour chiffrer les tokens Shopify en base (`openssl rand -hex 32`) |
 | `SHOPIFY_API_VERSION` | Version de l'Admin API GraphQL utilisée |
 | `SHOPIFY_MOCK_MODE` | `true` = aucune boutique réelle requise, données Shopify simulées (voir plus bas) |
-| `ANTHROPIC_API_KEY` | Clé API Anthropic, requise si `AI_MOCK_MODE=false` |
-| `AI_MODEL` | Modèle Claude utilisé pour l'analyse vision + texte |
+| `OPENAI_API_KEY` | Clé API OpenAI, requise si `AI_MOCK_MODE=false` |
+| `AI_MODEL` | Modèle OpenAI utilisé pour l'analyse vision + texte |
 | `AI_MOCK_MODE` | `true` = optimisation générée par un provider déterministe local, sans appel API |
 | `UPLOAD_DIR`, `UPLOAD_TTL_MINUTES`, `MAX_UPLOAD_SIZE_MB` | Paramètres de stockage temporaire des images produit |
 | `STRIPE_SECRET_KEY` | Clé secrète Stripe (Dashboard → Developers → API keys), requise si `STRIPE_MOCK_MODE=false` |
@@ -154,7 +154,7 @@ Shopify a remplacé l'ancien token statique par le **Dev Dashboard** : les apps 
 4. Toujours sur cet onglet, notez le **Client ID** et le **Client Secret** (bouton pour le révéler)
 5. Dans `.env` (ou les variables Vercel), passez `SHOPIFY_MOCK_MODE=false`
 6. Dans l'application, allez sur `/stores` et renseignez : adresse (`nom-boutique.myshopify.com`), Client ID, Client Secret
-7. Pour activer l'analyse IA réelle (vision + texte), passez `AI_MOCK_MODE=false` et renseignez `ANTHROPIC_API_KEY`.
+7. Pour activer l'analyse IA réelle (vision + texte), passez `AI_MOCK_MODE=false` et renseignez `OPENAI_API_KEY`.
 
 La connexion est testée en direct (échange de token + requête GraphQL `shop`) avant d'être enregistrée ; toute erreur (identifiants invalides, boutique hors organisation, domaine incorrect) est affichée clairement à l'utilisateur. Seul le Client Secret est chiffré en base (`encryptedClientSecret`) ; le token d'accès à courte durée de vie est mis en cache chiffré (`encryptedAccessToken` / `accessTokenExpiresAt`) et rafraîchi automatiquement.
 
@@ -234,7 +234,7 @@ src/
   components/            composants UI réutilisables + primitives (src/components/ui)
   lib/
     shopify/              client GraphQL, requêtes, mutations, service, fixtures (mode démo)
-    ai/                    prompt builder, schéma JSON strict, provider Anthropic + mock
+    ai/                    prompt builder, schéma JSON strict, provider OpenAI + mock
     seo/                   scoring, validateurs, détection de cannibalisation
     stripe/                client Stripe, checkout/portail/plans, sync webhook (+ mode mock)
     billing/               limites d'usage par plan

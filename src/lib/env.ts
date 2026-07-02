@@ -12,8 +12,8 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((v) => v === "true"),
-  ANTHROPIC_API_KEY: z.string().optional(),
-  AI_MODEL: z.string().default("claude-sonnet-4-5"),
+  OPENAI_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().default("gpt-4o"),
   AI_MOCK_MODE: z
     .string()
     .default("false")

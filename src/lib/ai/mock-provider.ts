@@ -73,7 +73,7 @@ export class MockAiProvider implements AiProvider {
         style: orientation.tone === "PREMIUM" ? "élégant" : "moderne",
         target_user: "Non déterminé (mode démonstration, images non analysées)",
         important_visual_details: [
-          "Analyse visuelle simulée — connectez ANTHROPIC_API_KEY et désactivez AI_MOCK_MODE pour une analyse réelle des images.",
+          "Analyse visuelle simulée — connectez OPENAI_API_KEY et désactivez AI_MOCK_MODE pour une analyse réelle des images.",
         ],
       },
       keyword: {

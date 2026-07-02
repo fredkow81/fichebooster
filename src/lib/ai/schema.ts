@@ -37,7 +37,13 @@ export const metaSchema = z.object({
 });
 
 export const variantSchema = z.object({
-  id: z.string().optional(),
+  // Always required (never null/optional): OpenAI's Structured Outputs
+  // helper for Zod v3 emits an OpenAPI-style `nullable: true` for
+  // nullable/optional fields, which OpenAI's own strict-mode validator then
+  // rejects as an invalid JSON Schema. Every product variant we send in the
+  // prompt already has a real Shopify id, so requiring a plain string here
+  // (never actually empty in practice) sidesteps the incompatibility.
+  id: z.string(),
   original_name: z.string(),
   recommended_name: z.string(),
 });
