@@ -1,0 +1,222 @@
+// Shopify SEO Optimizer — Prisma schema
+// Postgres + Prisma ORM. JWT-based auth (no DB sessions needed).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OptimizationStatus {
+  DRAFT
+  ANALYZING
+  READY_FOR_REVIEW
+  PUBLISHED
+  ERROR
+}
+
+enum ObjectiveGoal {
+  SEO
+  GOOGLE_SHOPPING
+  CONVERSION
+  BALANCED
+}
+
+enum WritingTone {
+  NATURAL
+  PREMIUM
+  EXPERT
+  ACCESSIBLE
+}
+
+enum CannibalizationRisk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stores              Store[]
+  optimizationHistory OptimizationHistory[]
+
+  @@map("users")
+}
+
+/// A connected Shopify store. Access token is encrypted at rest (AES-256-GCM)
+/// via src/lib/crypto.ts — never stored or logged in plaintext.
+model Store {
+  id                    String   @id @default(cuid())
+  userId                String
+  shopDomain            String   @unique // e.g. my-shop.myshopify.com
+  encryptedAccessToken  String
+  scope                 String?
+  defaultMarket         String   @default("France")
+  defaultLanguage       String   @default("fr")
+  isActive              Boolean  @default(true)
+  lastSyncedAt          DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  optimizations  ProductOptimization[]
+  snapshots      ProductSnapshot[]
+  history        OptimizationHistory[]
+
+  @@index([userId])
+  @@map("stores")
+}
+
+/// Immutable copy of the product's state at the moment optimization started,
+/// so we can always diff "before" vs "after".
+model ProductSnapshot {
+  id                String   @id @default(cuid())
+  storeId           String
+  shopifyProductId  String
+  title             String
+  handle            String
+  descriptionHtml   String   @db.Text
+  metaTitle         String?
+  metaDescription   String?
+  vendor            String?
+  productType       String?
+  images            Json     // string[] of image URLs
+  variants          Json     // raw Shopify variant objects
+  collections       Json     // [{id, title, handle}]
+  capturedAt        DateTime @default(now())
+
+  store         Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  optimizations ProductOptimization[]
+
+  @@index([storeId, shopifyProductId])
+  @@map("product_snapshots")
+}
+
+/// Core record of one optimization run for one product. Holds both the
+/// AI-recommended values and the user-edited final values.
+model ProductOptimization {
+  id                String              @id @default(cuid())
+  storeId           String
+  snapshotId        String
+  shopifyProductId  String
+  status            OptimizationStatus  @default(DRAFT)
+
+  // orientation inputs
+  niche             String
+  collectionHint    String?
+  targetMarket      String              @default("France")
+  targetLanguage    String              @default("fr")
+  tone              WritingTone         @default(NATURAL)
+  objective         ObjectiveGoal       @default(BALANCED)
+
+  // AI vision analysis
+  imageAnalysis     Json?
+
+  // recommended values (from AI)
+  recommendedHandle          String?
+  recommendedTitleSeo        String?
+  recommendedTitleShopping   String?
+  recommendedTitleBalanced   String?
+  recommendedMetaTitle       String?
+  recommendedMetaDescription String?
+  recommendedVariants        Json?
+  recommendedDescriptionHtml String?  @db.Text
+
+  // final values chosen/edited by the user (what gets published)
+  finalHandle          String?
+  finalTitle            String?
+  finalMetaTitle         String?
+  finalMetaDescription   String?
+  finalVariants           Json?
+  finalDescriptionHtml    String?  @db.Text
+
+  seoScoreBefore    Int?
+  seoScoreAfter     Int?
+  seoImprovements   Json? // string[]
+  seoRisks          Json? // string[]
+
+  publishedAt       DateTime?
+  errorMessage      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store               Store                        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  snapshot            ProductSnapshot              @relation(fields: [snapshotId], references: [id])
+  keywordRecommendation KeywordRecommendation?
+  internalLinks       InternalLinkRecommendation[]
+  historyEntries      OptimizationHistory[]
+
+  @@index([storeId, shopifyProductId])
+  @@map("product_optimizations")
+}
+
+model KeywordRecommendation {
+  id                     String              @id @default(cuid())
+  optimizationId         String              @unique
+  primaryKeyword         String
+  relevanceScore         Int
+  transactionalIntentScore Int
+  cannibalizationRisk    CannibalizationRisk @default(LOW)
+  conflictingProductIds  Json?               // string[] of shopify product ids sharing similar keyword
+  justification          String              @db.Text
+  createdAt              DateTime            @default(now())
+
+  optimization ProductOptimization @relation(fields: [optimizationId], references: [id], onDelete: Cascade)
+
+  @@map("keyword_recommendations")
+}
+
+model InternalLinkRecommendation {
+  id             String   @id @default(cuid())
+  optimizationId String
+  type           String   // "collection" | "similar_product"
+  targetUrl      String
+  targetHandle   String
+  anchorText     String
+  justification  String   @db.Text
+  createdAt      DateTime @default(now())
+
+  optimization ProductOptimization @relation(fields: [optimizationId], references: [id], onDelete: Cascade)
+
+  @@index([optimizationId])
+  @@map("internal_link_recommendations")
+}
+
+/// Append-only audit trail. One row per meaningful action (draft saved,
+/// published, error) so the history page can show a full timeline.
+model OptimizationHistory {
+  id                String   @id @default(cuid())
+  storeId           String
+  optimizationId    String
+  userId            String
+  shopifyProductId  String
+  action            String   // "draft_saved" | "published" | "error"
+  keyword           String?
+  oldTitle          String?
+  newTitle          String?
+  oldHandle         String?
+  newHandle         String?
+  oldMetaDescription String?
+  newMetaDescription String?
+  status            OptimizationStatus
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+
+  store        Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  optimization ProductOptimization  @relation(fields: [optimizationId], references: [id], onDelete: Cascade)
+  user         User                 @relation(fields: [userId], references: [id])
+
+  @@index([storeId])
+  @@index([optimizationId])
+  @@map("optimization_history")
+}

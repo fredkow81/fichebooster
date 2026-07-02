@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --primary: 222 89% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+.prose-shopify h2 {
+  @apply text-xl font-semibold mt-6 mb-2;
+}
+.prose-shopify h3 {
+  @apply text-lg font-semibold mt-4 mb-2;
+}
+.prose-shopify p {
+  @apply mb-3 leading-relaxed text-sm;
+}
+.prose-shopify ul {
+  @apply list-disc pl-5 mb-3 space-y-1 text-sm;
+}
+.prose-shopify a {
+  @apply text-primary underline underline-offset-2;
+}
