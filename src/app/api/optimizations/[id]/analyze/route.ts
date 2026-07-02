@@ -6,6 +6,7 @@ import { handleApiError } from "@/lib/api/response";
 import { getAiProvider } from "@/lib/ai";
 import type { PromptContext } from "@/lib/ai/prompt";
 import { listCollections, getSimilarProducts } from "@/lib/shopify/service";
+import { pickMostRelevantCollection, rankSimilarProducts } from "@/lib/shopify/similarity";
 import { getExistingKeywordList, getExistingKeywordUsages } from "@/lib/seo/keyword-repository";
 import { checkCannibalization } from "@/lib/seo/keyword";
 import { computeSeoScore } from "@/lib/seo/scoring";
@@ -44,10 +45,11 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     };
 
     const collections = await listCollections(store);
-    const primaryCollection = snapshotCollections[0];
-    const similarProducts = primaryCollection
+    const primaryCollection = pickMostRelevantCollection(product.title, snapshotCollections);
+    const similarCandidates = primaryCollection
       ? await getSimilarProducts(store, primaryCollection.id, product.id)
       : [];
+    const similarProducts = rankSimilarProducts(product.title, similarCandidates, 8);
 
     const existingKeywordUsages = await getExistingKeywordUsages(store.id, product.id);
 

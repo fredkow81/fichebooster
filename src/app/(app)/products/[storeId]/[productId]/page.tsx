@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUserId, requireOwnedStore } from "@/lib/api/session";
 import { getProduct, getSimilarProducts } from "@/lib/shopify/service";
+import { pickMostRelevantCollection, rankSimilarProducts } from "@/lib/shopify/similarity";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,9 +23,11 @@ export default async function ProductDetailPage({
   const product = await getProduct(store, productId);
   if (!product) notFound();
 
-  const similar = product.collections[0]
-    ? await getSimilarProducts(store, product.collections[0].id, product.id)
+  const bestCollection = pickMostRelevantCollection(product.title, product.collections);
+  const similarCandidates = bestCollection
+    ? await getSimilarProducts(store, bestCollection.id, product.id)
     : [];
+  const similar = rankSimilarProducts(product.title, similarCandidates, 6);
 
   const latestOptimization = await prisma.productOptimization.findFirst({
     where: { storeId: store.id, shopifyProductId: product.id },
@@ -111,7 +114,9 @@ export default async function ProductDetailPage({
       {similar.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Produits similaires de la même collection</CardTitle>
+            <CardTitle>
+              Produits similaires{bestCollection ? ` — ${bestCollection.title}` : ""}
+            </CardTitle>
           </CardHeader>
           <CardContent className="flex gap-4 flex-wrap">
             {similar.map((p) => (

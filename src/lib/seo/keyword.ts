@@ -1,44 +1,8 @@
+import { tokenize, jaccardSimilarity as similarity } from "@/lib/text-similarity";
+
 export interface KeywordUsage {
   productId: string;
   keyword: string;
-}
-
-const STOPWORDS = new Set([
-  "de",
-  "du",
-  "des",
-  "le",
-  "la",
-  "les",
-  "un",
-  "une",
-  "et",
-  "en",
-  "pour",
-  "avec",
-  "à",
-  "au",
-  "aux",
-]);
-
-function tokenize(keyword: string): string[] {
-  return keyword
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 1 && !STOPWORDS.has(t));
-}
-
-/** Jaccard similarity over token sets — simple, explainable, no external API required. */
-function similarity(a: string, b: string): number {
-  const tokensA = new Set(tokenize(a));
-  const tokensB = new Set(tokenize(b));
-  if (tokensA.size === 0 || tokensB.size === 0) return 0;
-
-  const intersection = [...tokensA].filter((t) => tokensB.has(t)).length;
-  const union = new Set([...tokensA, ...tokensB]).size;
-  return intersection / union;
 }
 
 export type CannibalizationRisk = "LOW" | "MEDIUM" | "HIGH";
