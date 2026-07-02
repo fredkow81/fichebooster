@@ -16,6 +16,9 @@ export function handleApiError(err: unknown) {
   if (err instanceof ApiAuthError) {
     return jsonError(err.message, err.status);
   }
+  if (err instanceof PlanLimitError) {
+    return jsonError(err.message, 402);
+  }
   // Unexpected errors (DB connectivity, bugs, etc.) are logged server-side
   // only — their raw message may contain internal details (connection
   // strings, stack traces) that must never reach the client.
@@ -30,5 +33,13 @@ export class ApiAuthError extends Error {
   ) {
     super(message);
     this.name = "ApiAuthError";
+  }
+}
+
+/** Thrown when a plan usage limit (stores, optimizations/month) is exceeded. */
+export class PlanLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PlanLimitError";
   }
 }

@@ -5,6 +5,7 @@ import { requireUserId, requireOwnedStore } from "@/lib/api/session";
 import { handleApiError, jsonError } from "@/lib/api/response";
 import { orientationSchema } from "@/lib/validations/optimization";
 import { getProduct } from "@/lib/shopify/service";
+import { assertOptimizationLimit } from "@/lib/billing/limits";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
     const input = orientationSchema.parse(body);
 
     const store = await requireOwnedStore(input.storeId, userId);
+    await assertOptimizationLimit(userId);
 
     const product = await getProduct(store, input.shopifyProductId);
     if (!product) {

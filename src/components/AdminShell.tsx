@@ -2,34 +2,29 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Store, Package, History, Settings, LogOut, CreditCard, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Users, Tags, LogOut, ArrowLeft } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/stores", label: "Boutiques", icon: Store },
-  { href: "/products", label: "Produits", icon: Package },
-  { href: "/history", label: "Historique", icon: History },
-  { href: "/billing", label: "Facturation", icon: CreditCard },
-  { href: "/settings", label: "Paramètres", icon: Settings },
+  { href: "/admin", label: "Vue d'ensemble", icon: LayoutDashboard, exact: true },
+  { href: "/admin/users", label: "Utilisateurs", icon: Users, exact: false },
+  { href: "/admin/plans", label: "Plans", icon: Tags, exact: false },
 ];
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
 
   return (
     <div className="flex min-h-screen">
       <aside className="w-60 shrink-0 border-r border-border bg-secondary/30 flex flex-col">
         <div className="p-4 border-b border-border">
-          <span className="font-semibold text-lg">SEO Optimizer</span>
+          <span className="font-semibold text-lg">Administration</span>
         </div>
         <nav className="flex-1 p-2 flex flex-col gap-1">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
-            const active = pathname.startsWith(item.href);
+            const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
             return (
               <Link
                 key={item.href}
@@ -44,22 +39,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
-          {isAdmin && (
-            <Link
-              href="/admin"
-              className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                pathname.startsWith("/admin")
-                  ? "bg-primary text-primary-foreground"
-                  : "hover:bg-secondary text-foreground",
-              )}
-            >
-              <ShieldCheck className="h-4 w-4" />
-              Administration
-            </Link>
-          )}
         </nav>
-        <div className="p-2 border-t border-border">
+        <div className="p-2 border-t border-border flex flex-col gap-1">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Retour à l'app
+          </Link>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary w-full"

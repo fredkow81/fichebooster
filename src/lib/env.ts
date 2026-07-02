@@ -27,6 +27,23 @@ const envSchema = z.object({
     .string()
     .default("10")
     .transform((v) => Number.parseInt(v, 10)),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_MOCK_MODE: z
+    .string()
+    .default("true")
+    .transform((v) => v === "true"),
+  // Comma-separated list of emails auto-promoted to ADMIN on login/registration.
+  // See src/lib/auth.ts — avoids needing direct DB access to bootstrap the first admin.
+  ADMIN_EMAILS: z
+    .string()
+    .default("")
+    .transform((v) =>
+      v
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean),
+    ),
 });
 
 function loadEnv() {

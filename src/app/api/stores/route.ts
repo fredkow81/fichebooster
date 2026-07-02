@@ -5,6 +5,7 @@ import { handleApiError, jsonError } from "@/lib/api/response";
 import { connectStoreSchema } from "@/lib/validations/store";
 import { encryptSecret } from "@/lib/crypto";
 import { verifyStoreConnection } from "@/lib/shopify/service";
+import { assertStoreLimit } from "@/lib/billing/limits";
 
 const STORE_SAFE_SELECT = {
   id: true,
@@ -39,6 +40,9 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.store.findUnique({ where: { shopDomain: input.shopDomain } });
     if (existing && existing.userId !== userId) {
       return jsonError("Cette boutique est déjà connectée par un autre compte.", 409);
+    }
+    if (!existing) {
+      await assertStoreLimit(userId);
     }
 
     const verification = await verifyStoreConnection(input.shopDomain, input.accessToken);

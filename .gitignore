@@ -27,3 +27,6 @@ next-env.d.ts
 
 # temp uploads
 /tmp-uploads
+
+# claude code runtime state
+.claude/scheduled_tasks.lock

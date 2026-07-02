@@ -11,6 +11,7 @@ SaaS d'optimisation SEO automatique de fiches produit Shopify : connexion boutiq
 - [Connecter une boutique Shopify](#connecter-une-boutique-shopify)
 - [Lancer le projet](#lancer-le-projet)
 - [Tester l'optimisation d'un produit](#tester-loptimisation-dun-produit)
+- [Abonnements & interface admin](#abonnements--interface-admin)
 - [Tests automatisés](#tests-automatisés)
 - [Structure du projet](#structure-du-projet)
 - [Sécurité](#sécurité)
@@ -126,6 +127,10 @@ Toutes les variables sont validées au démarrage via [`src/lib/env.ts`](src/lib
 | `AI_MODEL` | Modèle Claude utilisé pour l'analyse vision + texte |
 | `AI_MOCK_MODE` | `true` = optimisation générée par un provider déterministe local, sans appel API |
 | `UPLOAD_DIR`, `UPLOAD_TTL_MINUTES`, `MAX_UPLOAD_SIZE_MB` | Paramètres de stockage temporaire des images produit |
+| `STRIPE_SECRET_KEY` | Clé secrète Stripe (Dashboard → Developers → API keys), requise si `STRIPE_MOCK_MODE=false` |
+| `STRIPE_WEBHOOK_SECRET` | Secret de signature du endpoint `/api/webhooks/stripe` (Dashboard → Developers → Webhooks) |
+| `STRIPE_MOCK_MODE` | `true` = checkout/portail/création de plan simulés en base, sans appel Stripe réel |
+| `ADMIN_EMAILS` | Emails (séparés par virgules) auto-promus administrateur à la connexion/inscription |
 
 Les tokens Shopify ne sont **jamais** stockés en clair : ils sont chiffrés (AES-256-GCM) avant écriture en base via [`src/lib/crypto.ts`](src/lib/crypto.ts).
 
@@ -174,6 +179,27 @@ npm run lint         # ESLint
    - **Publier sur Shopify** pour ouvrir la modale de confirmation (avec avertissement si l'URL du produit change), puis appliquer les changements validés sur la fiche Shopify réelle.
 7. Consultez `/history` pour voir l'historique complet des optimisations (ancien/nouveau titre, handle, meta description, statut, auteur).
 
+## Abonnements & interface admin
+
+Chaque utilisateur a toujours exactement un abonnement (`Subscription`), créé à l'inscription sur le plan marqué `isDefault: true` (le plan **Gratuit** par défaut : 1 boutique / 3 optimisations par mois — modifiable depuis l'admin). Les limites sont appliquées côté serveur avant toute création de boutique ou d'optimisation (`src/lib/billing/limits.ts`) ; un dépassement renvoie une erreur claire (HTTP 402).
+
+### Devenir administrateur
+
+Ajoutez votre email à `ADMIN_EMAILS` dans `.env` (local) ou dans les variables d'environnement Vercel (production), puis reconnectez-vous (la promotion se fait à la connexion — voir `src/lib/auth.ts`). Le lien **Administration** apparaît alors dans le menu, donnant accès à `/admin` :
+
+- **Vue d'ensemble** : nombre d'utilisateurs, abonnements actifs, MRR estimé, répartition par plan
+- **Utilisateurs** : liste complète, changement manuel de plan/rôle par utilisateur (utile pour un compte offert ou un support client, sans passer par Stripe)
+- **Plans** : création/édition des paliers tarifaires (Starter/Pro/Business...). La création d'un plan payant crée automatiquement le Product + Price Stripe correspondant. **Le prix n'est plus modifiable après création** (les Price Stripe sont immuables) — créez un nouveau plan pour changer un tarif.
+
+### Mode démo vs Stripe réel
+
+Par défaut `STRIPE_MOCK_MODE=true` : la page `/billing`, le checkout, le portail client et la création de plans fonctionnent entièrement en simulant les écritures en base, sans compte Stripe. Pour passer en production avec de vrais paiements :
+
+1. Créez un compte sur [dashboard.stripe.com](https://dashboard.stripe.com), récupérez la clé secrète (`STRIPE_SECRET_KEY`)
+2. Ajoutez un endpoint webhook pointant vers `https://votre-domaine/api/webhooks/stripe`, écoutant au minimum `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed` — copiez le secret de signature dans `STRIPE_WEBHOOK_SECRET`
+3. Passez `STRIPE_MOCK_MODE=false`
+4. Les plans déjà créés en mode mock ont des identifiants Stripe factices (`mock_price_...`) — recréez-les depuis `/admin/plans` une fois en mode réel pour qu'ils pointent vers de vrais Price Stripe
+
 ## Tests automatisés
 
 ```bash
@@ -191,25 +217,29 @@ Couvre notamment (voir `src/lib/**/*.test.ts`) :
 - Score d'intention transactionnelle
 - Validité stricte du JSON retourné par l'IA (schéma Zod)
 - Calcul du score SEO (0–100) avant/après
+- Logique de limite de plan (`isOverLimit`, illimité vs plafonné)
 
 ## Structure du projet
 
 ```
 src/
   app/
-    (app)/              pages protégées (dashboard, stores, products, history, settings, optimizations)
-    api/                 routes API (auth, stores, optimizations, history, keyword, seo)
+    (app)/              pages protégées (dashboard, stores, products, history, settings, optimizations, billing)
+    (admin)/             pages réservées aux administrateurs (/admin, /admin/users, /admin/plans)
+    api/                 routes API (auth, stores, optimizations, history, keyword, seo, billing, admin, webhooks)
     login/                page de connexion / inscription
   components/            composants UI réutilisables + primitives (src/components/ui)
   lib/
     shopify/              client GraphQL, requêtes, mutations, service, fixtures (mode démo)
     ai/                    prompt builder, schéma JSON strict, provider Anthropic + mock
     seo/                   scoring, validateurs, détection de cannibalisation
+    stripe/                client Stripe, checkout/portail/plans, sync webhook (+ mode mock)
+    billing/               limites d'usage par plan
     validations/           schémas Zod des entrées API/formulaires
-    api/                   helpers session/auth/erreurs pour les routes API
+    api/                   helpers session/auth/erreurs pour les routes API (dont requireAdmin)
 prisma/
-  schema.prisma           modèles de données
-  seed.ts                 compte + boutique de démonstration
+  schema.prisma           modèles de données (dont Plan, Subscription)
+  seed.ts                 compte démo + plan gratuit + backfill des utilisateurs existants
 ```
 
 ## Sécurité
@@ -220,6 +250,8 @@ prisma/
 - **Aucune écriture Shopify n'a lieu sans validation explicite de l'utilisateur** : la route `/api/optimizations/[id]/publish` revalide toutes les règles SEO (longueurs, mots requis, liens internes) avant d'appeler l'Admin API.
 - Les erreurs Shopify (token invalide, rate limit, etc.) sont interceptées et traduites en messages compréhensibles côté UI.
 - Les images produit envoyées à l'IA sont limitées en nombre et en taille (voir `src/lib/ai/image-utils.ts`) pour éviter les abus.
+- Les routes `/api/admin/*` et le groupe de pages `(admin)` vérifient le rôle `ADMIN` côté serveur (`requireAdmin()` + double vérification dans le layout) — jamais uniquement côté client.
+- Le webhook Stripe vérifie la signature HMAC (`stripe-signature`) sur le corps brut de la requête avant tout traitement ; toute requête non signée ou mal signée est rejetée (400).
 
 ## Limitations connues
 

@@ -8,5 +8,7 @@ export const config = {
     "/history/:path*",
     "/settings/:path*",
     "/optimizations/:path*",
+    "/billing/:path*",
+    "/admin/:path*",
   ],
 };

@@ -12,6 +12,24 @@ const DEMO_SHOP_DOMAIN = "demo-shop.myshopify.com";
 async function main() {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
 
+  const freePlan = await prisma.plan.upsert({
+    where: { key: "FREE" },
+    update: {},
+    create: {
+      key: "FREE",
+      name: "Gratuit",
+      description: "Pour découvrir l'outil.",
+      priceCents: 0,
+      currency: "eur",
+      interval: "month",
+      maxStores: 1,
+      maxOptimizationsPerMonth: 3,
+      isDefault: true,
+      isActive: true,
+      sortOrder: 0,
+    },
+  });
+
   const user = await prisma.user.upsert({
     where: { email: DEMO_EMAIL },
     update: {},
@@ -19,6 +37,16 @@ async function main() {
       email: DEMO_EMAIL,
       passwordHash,
       name: "Utilisateur démo",
+    },
+  });
+
+  await prisma.subscription.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: {
+      userId: user.id,
+      planId: freePlan.id,
+      status: "ACTIVE",
     },
   });
 
@@ -37,6 +65,20 @@ async function main() {
       lastSyncedAt: new Date(),
     },
   });
+
+  // Backfill: any user created before the billing system existed has no
+  // Subscription row. Every user must have exactly one (see limits.ts /
+  // register route), so attach them to the default plan.
+  const usersWithoutSubscription = await prisma.user.findMany({
+    where: { subscription: null },
+    select: { id: true, email: true },
+  });
+  for (const orphan of usersWithoutSubscription) {
+    await prisma.subscription.create({
+      data: { userId: orphan.id, planId: freePlan.id, status: "ACTIVE" },
+    });
+    console.log(`Backfill : abonnement gratuit attribué à ${orphan.email}`);
+  }
 
   console.log("Seed terminé.");
   console.log(`Compte démo : ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
