@@ -13,8 +13,11 @@ export default async function StoreDetailPage({ params }: { params: { storeId: s
   const store = await requireOwnedStore(params.storeId, userId).catch(() => null);
   if (!store) notFound();
 
-  const accessToken = decryptSecret(store.encryptedAccessToken);
-  const verification = await verifyStoreConnection(store.shopDomain, accessToken);
+  const verification = await verifyStoreConnection(
+    store.shopDomain,
+    store.shopifyClientId ?? "",
+    store.encryptedClientSecret ? decryptSecret(store.encryptedClientSecret) : "",
+  );
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">

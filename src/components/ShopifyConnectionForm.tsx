@@ -12,7 +12,8 @@ export function ShopifyConnectionForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [shopDomain, setShopDomain] = useState("");
-  const [accessToken, setAccessToken] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
   const [defaultMarket, setDefaultMarket] = useState("France");
   const [defaultLanguage, setDefaultLanguage] = useState("fr");
   const [loading, setLoading] = useState(false);
@@ -27,7 +28,7 @@ export function ShopifyConnectionForm() {
       const res = await fetch("/api/stores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shopDomain, accessToken, defaultMarket, defaultLanguage }),
+        body: JSON.stringify({ shopDomain, clientId, clientSecret, defaultMarket, defaultLanguage }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -49,8 +50,10 @@ export function ShopifyConnectionForm() {
       <CardHeader>
         <CardTitle>Connecter une boutique Shopify</CardTitle>
         <CardDescription>
-          Renseignez l'adresse de votre boutique et un token d'accès Admin API. Le token est chiffré avant
-          d'être stocké.
+          Créez une app personnalisée depuis le Dev Dashboard de votre boutique (Paramètres → Apps et
+          canaux de vente → Développer des apps) et renseignez son Client ID et Client Secret ci-dessous.
+          Le secret est chiffré avant d'être stocké ; ne fonctionne que pour une boutique de votre propre
+          organisation Shopify.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -66,13 +69,22 @@ export function ShopifyConnectionForm() {
             />
           </div>
           <div>
-            <Label htmlFor="accessToken">Token d'accès Admin API</Label>
+            <Label htmlFor="clientId">Client ID</Label>
             <Input
-              id="accessToken"
+              id="clientId"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="clientSecret">Client Secret</Label>
+            <Input
+              id="clientSecret"
               type="password"
-              placeholder="shpat_..."
-              value={accessToken}
-              onChange={(e) => setAccessToken(e.target.value)}
+              placeholder="shpss_..."
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
               required
             />
           </div>

@@ -8,7 +8,8 @@ export const connectStoreSchema = z.object({
       /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/i,
       "Format attendu : nom-boutique.myshopify.com",
     ),
-  accessToken: z.string().min(1, "Le token d'accès Admin API est requis"),
+  clientId: z.string().min(1, "Le Client ID est requis"),
+  clientSecret: z.string().min(1, "Le Client Secret est requis"),
   defaultMarket: z.string().default("France"),
   defaultLanguage: z.string().default("fr"),
 });

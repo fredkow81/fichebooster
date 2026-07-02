@@ -1,6 +1,7 @@
 import { env } from "@/lib/env";
-import { decryptSecret } from "@/lib/crypto";
-import { shopifyGraphQL, assertNoUserErrors, ShopifyApiError } from "./client";
+import { decryptSecret, encryptSecret } from "@/lib/crypto";
+import { prisma } from "@/lib/prisma";
+import { shopifyGraphQL, assertNoUserErrors, ShopifyApiError, fetchClientCredentialsToken } from "./client";
 import {
   PRODUCT_LIST_QUERY,
   PRODUCT_DETAIL_QUERY,
@@ -19,26 +20,60 @@ import type {
 
 export interface StoreCredentials {
   shopDomain: string;
-  encryptedAccessToken: string;
+  shopifyClientId: string | null;
+  encryptedClientSecret: string | null;
+  encryptedAccessToken: string | null;
+  accessTokenExpiresAt: Date | null;
 }
 
-function resolveToken(store: StoreCredentials): string {
-  return decryptSecret(store.encryptedAccessToken);
+// Refresh this long before actual expiry so a slow-running request never
+// gets caught mid-flight by a token that just expired.
+const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+/** Returns a valid access token, transparently refreshing (and persisting) it if expired or missing. */
+async function resolveToken(store: StoreCredentials): Promise<string> {
+  const isCachedTokenValid =
+    store.encryptedAccessToken &&
+    store.accessTokenExpiresAt &&
+    store.accessTokenExpiresAt.getTime() - TOKEN_REFRESH_BUFFER_MS > Date.now();
+
+  if (isCachedTokenValid) {
+    return decryptSecret(store.encryptedAccessToken!);
+  }
+
+  if (!store.shopifyClientId || !store.encryptedClientSecret) {
+    throw new ShopifyApiError(
+      "Identifiants Shopify manquants pour cette boutique. Reconnectez-la depuis la page Boutiques.",
+    );
+  }
+
+  const clientSecret = decryptSecret(store.encryptedClientSecret);
+  const { accessToken, expiresAt } = await fetchClientCredentialsToken(
+    store.shopDomain,
+    store.shopifyClientId,
+    clientSecret,
+  );
+
+  await prisma.store.update({
+    where: { shopDomain: store.shopDomain },
+    data: { encryptedAccessToken: encryptSecret(accessToken), accessTokenExpiresAt: expiresAt },
+  });
+
+  return accessToken;
 }
 
+/** Pure connection test — exchanges the credentials and runs a lightweight query, without persisting anything. */
 export async function verifyStoreConnection(
   shopDomain: string,
-  accessToken: string,
+  clientId: string,
+  clientSecret: string,
 ): Promise<{ ok: true; shopName: string } | { ok: false; error: string }> {
   if (env.SHOPIFY_MOCK_MODE) {
     return { ok: true, shopName: shopDomain.replace(".myshopify.com", "") };
   }
   try {
-    const data = await shopifyGraphQL<{ shop: { name: string } }>(
-      shopDomain,
-      accessToken,
-      SHOP_QUERY,
-    );
+    const { accessToken } = await fetchClientCredentialsToken(shopDomain, clientId, clientSecret);
+    const data = await shopifyGraphQL<{ shop: { name: string } }>(shopDomain, accessToken, SHOP_QUERY);
     return { ok: true, shopName: data.shop.name };
   } catch (err) {
     const message = err instanceof ShopifyApiError ? err.message : "Connexion à Shopify impossible.";
@@ -57,7 +92,7 @@ export async function listProducts(
     return all.filter((p) => p.title.toLowerCase().includes(q));
   }
 
-  const token = resolveToken(store);
+  const token = await resolveToken(store);
   const data = await shopifyGraphQL<{
     products: { nodes: RawProductSummary[] };
   }>(store.shopDomain, token, PRODUCT_LIST_QUERY, {
@@ -76,7 +111,7 @@ export async function getProduct(
     return mockProducts.find((p) => p.id === productId) ?? null;
   }
 
-  const token = resolveToken(store);
+  const token = await resolveToken(store);
   const data = await shopifyGraphQL<{ product: RawProduct | null }>(
     store.shopDomain,
     token,
@@ -92,7 +127,7 @@ export async function listCollections(store: StoreCredentials): Promise<ShopifyC
     return mockCollections;
   }
 
-  const token = resolveToken(store);
+  const token = await resolveToken(store);
   const data = await shopifyGraphQL<{
     collections: { nodes: { id: string; title: string; handle: string; productsCount: { count: number } }[] };
   }>(store.shopDomain, token, COLLECTIONS_QUERY, { first: 100 });
@@ -116,7 +151,7 @@ export async function getSimilarProducts(
     );
   }
 
-  const token = resolveToken(store);
+  const token = await resolveToken(store);
   const data = await shopifyGraphQL<{
     collection: { products: { nodes: RawProductSummary[] } } | null;
   }>(store.shopDomain, token, COLLECTION_PRODUCTS_QUERY, { id: collectionId, first: 20 });
@@ -135,7 +170,7 @@ export async function updateProduct(
     return;
   }
 
-  const token = resolveToken(store);
+  const token = await resolveToken(store);
 
   const input: Record<string, unknown> = { id: productId };
   if (payload.title !== undefined) input.title = payload.title;

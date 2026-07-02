@@ -144,18 +144,21 @@ Pour connecter une "boutique" en mode démo, utilisez n'importe quelle adresse a
 
 ### Mode production (boutique Shopify réelle)
 
-1. Dans votre boutique Shopify, créez une app personnalisée (**Paramètres → Apps et canaux de vente → Développer des apps**).
-2. Accordez les scopes Admin API suivants au minimum :
-   - `read_products`, `write_products`
-   - `read_product_listings`
-3. Installez l'app et récupérez le **token d'accès Admin API** (`shpat_...`).
-4. Dans `.env`, passez `SHOPIFY_MOCK_MODE=false`.
-5. Dans l'application, allez sur `/stores` et renseignez :
-   - Adresse : `nom-boutique.myshopify.com`
-   - Token d'accès Admin API
-6. Pour activer l'analyse IA réelle (vision + texte), passez `AI_MOCK_MODE=false` et renseignez `ANTHROPIC_API_KEY`.
+Shopify a remplacé l'ancien token statique par le **Dev Dashboard** : les apps personnalisées fournissent désormais un **Client ID + Client Secret**, échangés contre un token d'accès Admin API via le **client_credentials grant** (valable ~24h, renouvelé automatiquement par l'app — voir `src/lib/shopify/service.ts`).
 
-La connexion est testée en direct (requête GraphQL `shop`) avant d'être enregistrée ; toute erreur (token invalide, domaine incorrect, boutique inaccessible) est affichée clairement à l'utilisateur.
+⚠️ Cette méthode ne fonctionne que si l'app et la boutique appartiennent à la **même organisation Shopify** — parfaite pour connecter votre propre boutique de test, mais **pas utilisable pour de futurs clients tiers** (qui nécessiteront le flux OAuth complet, non implémenté ici).
+
+1. Dans l'admin de la boutique : `https://admin.shopify.com/store/VOTRE-BOUTIQUE/settings/apps/development` (ou **Paramètres → Apps et canaux de vente → Développer des apps**)
+2. **Créer une app**, onglet **Configuration** → **Admin API** → cochez au minimum `read_products`, `write_products`, `read_product_listings` → **Enregistrer**
+3. Onglet **Identifiants API** → **Installer l'app**
+4. Toujours sur cet onglet, notez le **Client ID** et le **Client Secret** (bouton pour le révéler)
+5. Dans `.env` (ou les variables Vercel), passez `SHOPIFY_MOCK_MODE=false`
+6. Dans l'application, allez sur `/stores` et renseignez : adresse (`nom-boutique.myshopify.com`), Client ID, Client Secret
+7. Pour activer l'analyse IA réelle (vision + texte), passez `AI_MOCK_MODE=false` et renseignez `ANTHROPIC_API_KEY`.
+
+La connexion est testée en direct (échange de token + requête GraphQL `shop`) avant d'être enregistrée ; toute erreur (identifiants invalides, boutique hors organisation, domaine incorrect) est affichée clairement à l'utilisateur. Seul le Client Secret est chiffré en base (`encryptedClientSecret`) ; le token d'accès à courte durée de vie est mis en cache chiffré (`encryptedAccessToken` / `accessTokenExpiresAt`) et rafraîchi automatiquement.
+
+Source : [Shopify Dev — Client credentials grant](https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/client-credentials-grant)
 
 ## Lancer le projet
 

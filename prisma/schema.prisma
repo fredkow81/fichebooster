@@ -116,17 +116,23 @@ model Subscription {
   @@map("subscriptions")
 }
 
-/// A connected Shopify store. Access token is encrypted at rest (AES-256-GCM)
-/// via src/lib/crypto.ts — never stored or logged in plaintext.
+/// A connected Shopify store. Uses the client_credentials grant: we store
+/// the app's Client ID (not sensitive) and Client Secret (encrypted), then
+/// lazily fetch/cache a short-lived Admin API access token (also encrypted,
+/// refreshed ~24h) — see src/lib/shopify/service.ts. Nothing is ever logged
+/// in plaintext (src/lib/crypto.ts).
 model Store {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   userId                String
-  shopDomain            String   @unique // e.g. my-shop.myshopify.com
-  encryptedAccessToken  String
+  shopDomain            String    @unique // e.g. my-shop.myshopify.com
+  shopifyClientId       String?
+  encryptedClientSecret String?
+  encryptedAccessToken  String?
+  accessTokenExpiresAt  DateTime?
   scope                 String?
-  defaultMarket         String   @default("France")
-  defaultLanguage       String   @default("fr")
-  isActive              Boolean  @default(true)
+  defaultMarket         String    @default("France")
+  defaultLanguage       String    @default("fr")
+  isActive              Boolean   @default(true)
   lastSyncedAt          DateTime?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

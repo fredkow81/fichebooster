@@ -45,25 +45,32 @@ export async function POST(req: NextRequest) {
       await assertStoreLimit(userId);
     }
 
-    const verification = await verifyStoreConnection(input.shopDomain, input.accessToken);
+    const verification = await verifyStoreConnection(input.shopDomain, input.clientId, input.clientSecret);
     if (!verification.ok) {
       return jsonError(verification.error, 422);
     }
 
-    const encryptedAccessToken = encryptSecret(input.accessToken);
+    const encryptedClientSecret = encryptSecret(input.clientSecret);
 
     const store = await prisma.store.upsert({
       where: { shopDomain: input.shopDomain },
       create: {
         userId,
         shopDomain: input.shopDomain,
-        encryptedAccessToken,
+        shopifyClientId: input.clientId,
+        encryptedClientSecret,
+        // encryptedAccessToken / accessTokenExpiresAt are left null — the
+        // first real API call lazily fetches and caches one (see
+        // src/lib/shopify/service.ts resolveToken()).
         defaultMarket: input.defaultMarket,
         defaultLanguage: input.defaultLanguage,
         lastSyncedAt: new Date(),
       },
       update: {
-        encryptedAccessToken,
+        shopifyClientId: input.clientId,
+        encryptedClientSecret,
+        encryptedAccessToken: null,
+        accessTokenExpiresAt: null,
         defaultMarket: input.defaultMarket,
         defaultLanguage: input.defaultLanguage,
         isActive: true,

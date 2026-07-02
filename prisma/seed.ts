@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { encryptSecret } from "../src/lib/crypto";
 
 const prisma = new PrismaClient();
 
@@ -56,10 +55,9 @@ async function main() {
     create: {
       userId: user.id,
       shopDomain: DEMO_SHOP_DOMAIN,
-      // Placeholder token — irrelevant while SHOPIFY_MOCK_MODE=true, since
-      // the Shopify service layer returns fixture data instead of calling
-      // the real Admin API.
-      encryptedAccessToken: encryptSecret("mock-access-token"),
+      // No Shopify credentials needed — irrelevant while SHOPIFY_MOCK_MODE=true,
+      // since the Shopify service layer returns fixture data instead of
+      // calling the real Admin API.
       defaultMarket: "France",
       defaultLanguage: "fr",
       lastSyncedAt: new Date(),
